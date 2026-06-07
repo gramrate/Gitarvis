@@ -1,5 +1,9 @@
 package src.ai;
 
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ArrayNode;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import src.config.AppConfig;
 
 import java.io.IOException;
@@ -11,6 +15,8 @@ import java.net.http.HttpResponse;
 import java.time.Duration;
 
 public final class QwenGateway implements AiGateway {
+    private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
+
     private final HttpClient httpClient;
     private final URI endpoint;
     private final String apiKey;
@@ -51,19 +57,7 @@ public final class QwenGateway implements AiGateway {
 
     @Override
     public String complete(String prompt) throws IOException, InterruptedException {
-        String body = """
-                {
-                  "model": "%s",
-                  "messages": [
-                    {
-                      "role": "user",
-                      "content": "%s"
-                    }
-                  ],
-                  "temperature": %s,
-                  "max_tokens": %s
-                }
-                """.formatted(jsonEscape(model), jsonEscape(prompt), temperature, maxTokens);
+        String body = buildRequestBody(prompt);
 
         HttpRequest.Builder requestBuilder = HttpRequest.newBuilder(endpoint)
                 .timeout(requestTimeout)
@@ -88,54 +82,25 @@ public final class QwenGateway implements AiGateway {
         return extractContent(response.body());
     }
 
+    private String buildRequestBody(String prompt) throws IOException {
+        ObjectNode body = OBJECT_MAPPER.createObjectNode();
+        body.put("model", model);
+        ArrayNode messages = body.putArray("messages");
+        ObjectNode userMessage = messages.addObject();
+        userMessage.put("role", "user");
+        userMessage.put("content", prompt);
+        body.put("temperature", temperature);
+        body.put("max_tokens", maxTokens);
+        return OBJECT_MAPPER.writeValueAsString(body);
+    }
+
     private static String extractContent(String json) throws IOException {
-        String marker = "\"content\"";
-        int markerIndex = json.indexOf(marker);
-        if (markerIndex < 0) {
+        JsonNode root = OBJECT_MAPPER.readTree(json);
+        JsonNode content = root.path("choices").path(0).path("message").path("content");
+        if (!content.isTextual()) {
             throw new IOException("AI response does not contain message content: " + json);
         }
-        int colonIndex = json.indexOf(':', markerIndex + marker.length());
-        int valueStart = json.indexOf('"', colonIndex + 1);
-        if (colonIndex < 0 || valueStart < 0) {
-            throw new IOException("Cannot parse AI response content: " + json);
-        }
-        return readJsonString(json, valueStart);
-    }
-
-    private static String readJsonString(String json, int quoteIndex) throws IOException {
-        StringBuilder value = new StringBuilder();
-        boolean escaped = false;
-        for (int i = quoteIndex + 1; i < json.length(); i++) {
-            char c = json.charAt(i);
-            if (escaped) {
-                value.append(switch (c) {
-                    case '"', '\\', '/' -> c;
-                    case 'b' -> '\b';
-                    case 'f' -> '\f';
-                    case 'n' -> '\n';
-                    case 'r' -> '\r';
-                    case 't' -> '\t';
-                    default -> c;
-                });
-                escaped = false;
-            } else if (c == '\\') {
-                escaped = true;
-            } else if (c == '"') {
-                return value.toString();
-            } else {
-                value.append(c);
-            }
-        }
-        throw new IOException("Unterminated JSON string in AI response.");
-    }
-
-    private static String jsonEscape(String value) {
-        return value
-                .replace("\\", "\\\\")
-                .replace("\"", "\\\"")
-                .replace("\n", "\\n")
-                .replace("\r", "\\r")
-                .replace("\t", "\\t");
+        return content.asText();
     }
 
     private static String trimTrailingSlash(String value) {

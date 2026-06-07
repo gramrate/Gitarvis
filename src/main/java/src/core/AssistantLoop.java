@@ -13,7 +13,6 @@ import src.output.ResponseFormatter;
 
 import java.io.IOException;
 import java.util.LinkedHashMap;
-import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 
@@ -62,7 +61,8 @@ public final class AssistantLoop {
                 }
 
                 String userText = input.get().trim();
-                if (isBlankCommand(userText)) {
+                AutoCommandUtils.CommandAnalysis analysis = AutoCommandUtils.analyze(userText);
+                if (analysis.blank()) {
                     if (state == AssistantState.ACTIVE) {
                         outputSink.write("Не расслышал команду. Повтори, пожалуйста.");
                     }
@@ -70,7 +70,7 @@ public final class AssistantLoop {
                 }
 
                 try {
-                    StateResult stateResult = handleState(userText);
+                    StateResult stateResult = handleState(analysis);
                     if (stateResult == StateResult.EXIT) {
                         outputSink.write("Завершаю работу.");
                         return;
@@ -86,13 +86,8 @@ public final class AssistantLoop {
                     continue;
                 }
 
-                if (isProgramExitCommand(userText)) {
-                    outputSink.write("Выключаюсь. Если что — зови, я рядом с git.");
-                    return;
-                }
-
                 try {
-                    if (!handle(userText)) {
+                    if (!handle(userText, analysis)) {
                         return;
                     }
                 } catch (Exception e) {
@@ -104,41 +99,41 @@ public final class AssistantLoop {
         }
     }
 
-    private StateResult handleState(String userText) throws IOException, InterruptedException {
-        String normalized = normalizeCommandText(userText);
-        if (isProgramExitCommand(normalized)) {
+    private StateResult handleState(AutoCommandUtils.CommandAnalysis analysis) throws IOException, InterruptedException {
+        if (analysis.programExit()) {
             return StateResult.EXIT;
         }
 
         if (state == AssistantState.WAITING) {
-            if (hasWakeName(normalized)) {
+            if (analysis.wakeName()) {
                 state = AssistantState.ACTIVE;
-                String commandAfterName = removeWakeName(userText).trim();
+                String commandAfterName = analysis.textWithoutWakeName().trim();
+                AutoCommandUtils.CommandAnalysis commandAnalysis = AutoCommandUtils.analyze(commandAfterName);
                 outputSink.write("Я в активном режиме.");
-                if (isBlankCommand(commandAfterName) || isWakeOnlyRemainder(commandAfterName)) {
+                if (commandAnalysis.blank() || analysis.wakeOnlyRemainder()) {
                     outputSink.write("Я тут, слушаю вас.");
                     return StateResult.CONSUMED;
                 }
-                return handle(commandAfterName) ? StateResult.CONSUMED : StateResult.EXIT;
+                return handle(commandAfterName, commandAnalysis) ? StateResult.CONSUMED : StateResult.EXIT;
             }
             return StateResult.CONSUMED;
         }
 
-        if (isStandbyCommand(normalized)) {
+        if (analysis.standby()) {
             pendingCommand = null;
             state = AssistantState.WAITING;
             outputSink.write("Я в режиме ожидания.");
             return StateResult.CONSUMED;
         }
 
-        if (hasWakeName(normalized)) {
+        if (analysis.wakeName()) {
             return StateResult.PASS_TO_COMMANDS;
         }
 
         return StateResult.PASS_TO_COMMANDS;
     }
 
-    private boolean handle(String userText) throws IOException, InterruptedException {
+    private boolean handle(String userText, AutoCommandUtils.CommandAnalysis analysis) throws IOException, InterruptedException {
         if (pendingCommand != null) {
             if (hasBrokenText(userText)) {
                 outputSink.write("Сообщение выглядит битым. Повтори, пожалуйста, я не хочу делать коммит с кашей в названии.");
@@ -151,7 +146,7 @@ public final class AssistantLoop {
             return true;
         }
 
-        if (tryHandleFastCommand(userText)) {
+        if (tryHandleAutoCommand(analysis.autoCommand())) {
             return true;
         }
 
@@ -253,220 +248,29 @@ public final class AssistantLoop {
         );
     }
 
-    private boolean tryHandleFastCommand(String userText) throws IOException, InterruptedException {
-        String normalized = normalizeCommandText(userText);
-        if (isAddCommitPhrase(normalized)) {
-            String message = extractCommitMessage(userText);
-            CommandInterpretation addCommit = new CommandInterpretation(
-                    CommandAction.ADD_COMMIT,
-                    message.isBlank() ? Map.of() : Map.of("message", message),
-                    1.0,
-                    message.isBlank()
-                            ? "Добавлю и сохраню. Только скажи сообщение для коммита — что пишем?"
-                            : "Добавляю изменения и фиксирую с сообщением «{MSG}». {RESULT}",
-                    message.isBlank()
-            );
+    private boolean tryHandleAutoCommand(Optional<CommandInterpretation> autoCommand) throws IOException, InterruptedException {
+        if (autoCommand.isEmpty()) {
+            return false;
+        }
 
-            if (addCommit.needInput()) {
-                pendingCommand = addCommit;
-                outputSink.write(addCommit.reply());
-                return true;
-            }
-
-            GitResult result = commandExecutor.execute(addCommit);
-            outputSink.write(responseFormatter.format(addCommit.reply(), result, addCommit.parameters()));
+        CommandInterpretation command = autoCommand.get();
+        if (command.needInput()) {
+            pendingCommand = command;
+            outputSink.write(command.reply());
+            return true;
+        }
+        if (command.action() == CommandAction.HELP) {
+            outputSink.write(command.reply());
             return true;
         }
 
-        if (isHelpPhrase(normalized)) {
-            outputSink.write(helpText());
-            return true;
-        }
-
-        if (isStatusPhrase(normalized)) {
-            CommandInterpretation status = new CommandInterpretation(
-                    CommandAction.STATUS,
-                    Map.of(),
-                    1.0,
-                    "Смотрю, что у нас в рабочем дереве... {RESULT}",
-                    false
-            );
-            GitResult result = commandExecutor.execute(status);
-            outputSink.write(responseFormatter.format(status.reply(), result, status.parameters()));
-            return true;
-        }
-        return false;
-    }
-
-    private boolean isStatusPhrase(String normalized) {
-        return normalized.contains("статус")
-                || normalized.contains("status")
-                || (normalized.contains("есть") && normalized.contains("измен"))
-                || normalized.contains("какие изменения")
-                || normalized.contains("что измен")
-                || normalized.contains("что поменялось")
-                || normalized.contains("что поменяли")
-                || normalized.contains("рабочем дереве");
-    }
-
-    private boolean isHelpPhrase(String normalized) {
-        return normalized.contains("список команд")
-                || normalized.contains("команды")
-                || normalized.contains("что ты умеешь")
-                || normalized.contains("помощь")
-                || normalized.equals("help");
-    }
-
-    private boolean isAddCommitPhrase(String normalized) {
-        boolean hasAdd = normalized.contains("добав") || normalized.contains("add");
-        boolean hasCommit = normalized.contains("сохран")
-                || normalized.contains("сохрани")
-                || normalized.contains("созран")
-                || normalized.contains("коммит")
-                || normalized.contains("commit");
-        return hasAdd && hasCommit;
-    }
-
-    private String extractCommitMessage(String userText) {
-        String normalized = userText.toLowerCase(Locale.ROOT);
-        String[] markers = {
-                "с сообщением",
-                "сообщением",
-                "message",
-                "месседжем"
-        };
-
-        int markerIndex = -1;
-        String marker = "";
-        for (String candidate : markers) {
-            int index = normalized.indexOf(candidate);
-            if (index >= 0 && (markerIndex < 0 || index < markerIndex)) {
-                markerIndex = index;
-                marker = candidate;
-            }
-        }
-
-        if (markerIndex < 0) {
-            return "";
-        }
-
-        return userText.substring(markerIndex + marker.length()).trim();
-    }
-
-    private boolean isProgramExitCommand(String userText) {
-        String normalized = normalizeCommandText(userText);
-        return normalized.equals("exit")
-                || normalized.equals("quit")
-                || normalized.equals("завершение работы")
-                || normalized.equals("заверши работу")
-                || normalized.equals("завершить работу")
-                || normalized.equals("закрой программу")
-                || normalized.equals("выключи программу")
-                || normalized.equals("выйди из программы");
-    }
-
-    private boolean isStandbyCommand(String normalized) {
-        return normalized.equals("спасибо")
-                || normalized.startsWith("спасибо ")
-                || normalized.equals("выход")
-                || normalized.equals("выйти")
-                || normalized.equals("выйди")
-                || normalized.equals("выключись")
-                || normalized.equals("выключайся")
-                || normalized.equals("выключаемся")
-                || normalized.equals("закройся")
-                || normalized.equals("завершить")
-                || normalized.equals("остановись")
-                || normalized.equals("стоп")
-                || normalized.equals("хватит")
-                || normalized.equals("пока");
-    }
-
-    private boolean hasWakeName(String normalized) {
-        for (String token : normalized.split("\\s+")) {
-            if (isWakeNameToken(token)) {
-                return true;
-            }
-        }
-        return false;
-    }
-
-    private String removeWakeName(String text) {
-        StringBuilder withoutName = new StringBuilder();
-        for (String token : normalizeCommandText(text).split("\\s+")) {
-            if (!isWakeNameToken(token)) {
-                withoutName.append(token).append(' ');
-            }
-        }
-        return withoutName.toString().trim();
-    }
-
-    private boolean isWakeOnlyRemainder(String text) {
-        String normalized = normalizeCommandText(text);
-        if (normalized.isBlank()) {
-            return true;
-        }
-
-        for (String token : normalized.split("\\s+")) {
-            if (!isWakeNoiseToken(token)) {
-                return false;
-            }
-        }
+        GitResult result = commandExecutor.execute(command);
+        outputSink.write(responseFormatter.format(command.reply(), result, command.parameters()));
         return true;
-    }
-
-    private boolean isWakeNoiseToken(String token) {
-        return token.equals("а")
-                || token.equals("э")
-                || token.equals("ээ")
-                || token.equals("эм")
-                || token.equals("мм")
-                || token.equals("ну")
-                || token.equals("алло")
-                || token.equals("слушай")
-                || token.equals("пожалуйста");
-    }
-
-    private boolean isWakeNameToken(String token) {
-        return token.startsWith("матве")
-                || token.startsWith("мотве")
-                || token.startsWith("мэтве")
-                || token.startsWith("метве")
-                || token.equals("мат")
-                || token.equals("мэт")
-                || token.equals("мет");
-    }
-
-    private boolean isBlankCommand(String userText) {
-        return normalizeCommandText(userText).isBlank();
     }
 
     private boolean hasBrokenText(String userText) {
         return userText.indexOf('\uFFFD') >= 0;
-    }
-
-    private String helpText() {
-        return """
-                Могу вот что:
-                init — создать репозиторий
-                status — показать изменения
-                add — добавить все изменения
-                commit — сохранить с сообщением
-                add_commit — добавить и сохранить с сообщением
-                branch_create — создать ветку
-                checkout — перейти на ветку
-                push — отправить текущую ветку в origin
-                спасибо / стоп — перейти в режим ожидания
-                завершение работы — закрыть программу
-                """.trim();
-    }
-
-    private String normalizeCommandText(String text) {
-        return text.toLowerCase(Locale.ROOT)
-                .replaceAll("[.!?,…:;«»]", " ")
-                .replace("—", " ")
-                .replaceAll("\\s+", " ")
-                .trim();
     }
 
     private enum StateResult {

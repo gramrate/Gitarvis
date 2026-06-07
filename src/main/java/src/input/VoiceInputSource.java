@@ -1,5 +1,7 @@
 package src.input;
 
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.vosk.LibVosk;
 import org.vosk.LogLevel;
 import org.vosk.Model;
@@ -15,13 +17,11 @@ import java.io.IOException;
 import java.nio.file.Path;
 import java.util.Locale;
 import java.util.Optional;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
 public final class VoiceInputSource implements InputSource {
+    private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
     private static final float SAMPLE_RATE = 16_000.0f;
     private static final int BUFFER_SIZE = 4_096;
-    private static final Pattern TEXT_PATTERN = Pattern.compile("\"text\"\\s*:\\s*\"((?:\\\\.|[^\"])*)\"");
     private static final String HEARD_PREFIX = "Vosk услышал: ";
 
     private final Path modelPath;
@@ -95,41 +95,12 @@ public final class VoiceInputSource implements InputSource {
         return line;
     }
 
-    private static String extractText(String json) {
-        Matcher matcher = TEXT_PATTERN.matcher(json);
-        if (!matcher.find()) {
+    static String extractText(String json) {
+        try {
+            JsonNode root = OBJECT_MAPPER.readTree(json);
+            return root.path("text").asText("").toLowerCase(Locale.ROOT);
+        } catch (IOException | RuntimeException ignored) {
             return "";
         }
-        return unescapeJsonString(matcher.group(1));
-    }
-
-    private static String unescapeJsonString(String value) {
-        StringBuilder result = new StringBuilder(value.length());
-        for (int i = 0; i < value.length(); i++) {
-            char current = value.charAt(i);
-            if (current != '\\' || i == value.length() - 1) {
-                result.append(current);
-                continue;
-            }
-
-            char escaped = value.charAt(++i);
-            switch (escaped) {
-                case '"', '\\', '/' -> result.append(escaped);
-                case 'b' -> result.append('\b');
-                case 'f' -> result.append('\f');
-                case 'n' -> result.append('\n');
-                case 'r' -> result.append('\r');
-                case 't' -> result.append('\t');
-                case 'u' -> {
-                    if (i + 4 <= value.length() - 1) {
-                        String hex = value.substring(i + 1, i + 5);
-                        result.append((char) Integer.parseInt(hex, 16));
-                        i += 4;
-                    }
-                }
-                default -> result.append(escaped);
-            }
-        }
-        return result.toString().toLowerCase(Locale.ROOT);
     }
 }
