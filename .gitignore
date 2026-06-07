@@ -1,0 +1,52 @@
+### Maven / Java ###
+target/
+*.class
+*.log
+hs_err_pid*
+replay_pid*
+
+!.mvn/wrapper/maven-wrapper.jar
+!**/src/main/**/target/
+!**/src/test/**/target/
+
+### Local config / secrets ###
+.env
+.env.*
+!.env.example
+config.yml
+config.local.yml
+models/
+
+### IntelliJ IDEA ###
+.idea/
+*.iws
+*.iml
+*.ipr
+
+### Eclipse ###
+.apt_generated
+.classpath
+.factorypath
+.project
+.settings
+.springBeans
+.sts4-cache
+
+### NetBeans ###
+/nbproject/private/
+/nbbuild/
+/dist/
+/nbdist/
+/.nb-gradle/
+build/
+!**/src/main/**/build/
+!**/src/test/**/build/
+
+### VS Code ###
+.vscode/
+
+### Kotlin ###
+.kotlin/
+
+### Mac OS ###
+.DS_Store

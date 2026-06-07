@@ -1,0 +1,84 @@
+package src.git;
+
+import src.domain.model.GitResult;
+
+import java.io.IOException;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Path;
+import java.util.ArrayList;
+import java.util.List;
+
+public final class GitRepository {
+    private final Path workingDirectory;
+
+    public GitRepository(Path workingDirectory) {
+        this.workingDirectory = workingDirectory;
+    }
+
+    public GitResult init() throws IOException, InterruptedException {
+        return git("init");
+    }
+
+    public GitResult status() throws IOException, InterruptedException {
+        return git("status", "--short");
+    }
+
+    public GitResult log() throws IOException, InterruptedException {
+        return git("log", "--oneline", "-10");
+    }
+
+    public GitResult diff(List<String> args) throws IOException, InterruptedException {
+        List<String> command = new ArrayList<>(List.of("diff"));
+        command.addAll(args);
+        return git(command);
+    }
+
+    public GitResult add(List<String> paths) throws IOException, InterruptedException {
+        List<String> command = new ArrayList<>(List.of("add"));
+        command.addAll(paths);
+        return git(command);
+    }
+
+    public GitResult commit(String message) throws IOException, InterruptedException {
+        return git("commit", "-m", message);
+    }
+
+    public GitResult push() throws IOException, InterruptedException {
+        return git("push");
+    }
+
+    public GitResult pull() throws IOException, InterruptedException {
+        return git("pull");
+    }
+
+    public GitResult branch() throws IOException, InterruptedException {
+        return git("branch", "--all");
+    }
+
+    public GitResult branchCreate(String branch) throws IOException, InterruptedException {
+        return git("branch", branch);
+    }
+
+    public GitResult checkout(String branch) throws IOException, InterruptedException {
+        return git("checkout", branch);
+    }
+
+    private GitResult git(String... args) throws IOException, InterruptedException {
+        return git(List.of(args));
+    }
+
+    private GitResult git(List<String> args) throws IOException, InterruptedException {
+        List<String> command = new ArrayList<>();
+        command.add("git");
+        command.addAll(args);
+
+        Process process = new ProcessBuilder(command)
+                .directory(workingDirectory.toFile())
+                .redirectErrorStream(true)
+                .start();
+
+        byte[] output = process.getInputStream().readAllBytes();
+        int exitCode = process.waitFor();
+        return new GitResult(exitCode == 0, exitCode, new String(output, StandardCharsets.UTF_8));
+    }
+}
