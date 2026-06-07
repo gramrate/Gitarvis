@@ -12,7 +12,7 @@ public record AppConfig(AiConfig ai, VoskConfig vosk) {
                         doubleValue(values, "ai.temperature", 0.1),
                         intValue(values, "ai.maxTokens", 160),
                         intValue(values, "ai.connectTimeoutSeconds", 20),
-                        intValue(values, "ai.requestTimeoutSeconds", 50)
+                        intValue(values, "ai.requestTimeoutSeconds", 120)
                 ),
                 new VoskConfig(
                         value(values, "vosk.modelPath", "models/vosk-model-small-ru-0.22"),

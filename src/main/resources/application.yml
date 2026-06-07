@@ -5,7 +5,7 @@ ai:
   temperature: 0.1
   maxTokens: 160
   connectTimeoutSeconds: 20
-  requestTimeoutSeconds: 50
+  requestTimeoutSeconds: 120
 
 vosk:
   modelPath: "models/vosk-model-small-ru-0.22"

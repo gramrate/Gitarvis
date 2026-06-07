@@ -4,6 +4,7 @@ import src.config.AppConfig;
 
 import java.io.IOException;
 import java.net.URI;
+import java.net.http.HttpTimeoutException;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
@@ -75,7 +76,12 @@ public final class QwenGateway implements AiGateway {
 
         HttpRequest request = requestBuilder.build();
 
-        HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+        HttpResponse<String> response;
+        try {
+            response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+        } catch (HttpTimeoutException e) {
+            throw new IOException("AI не ответил за " + requestTimeout.toSeconds() + " секунд. Проверь requestTimeoutSeconds в активном конфиге.", e);
+        }
         if (response.statusCode() < 200 || response.statusCode() >= 300) {
             throw new IOException("AI request failed with status " + response.statusCode() + ": " + response.body());
         }

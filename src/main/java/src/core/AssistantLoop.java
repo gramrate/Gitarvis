@@ -46,7 +46,7 @@ public final class AssistantLoop {
     }
 
     public void run() {
-        outputSink.write("Gitarvis готов. Говори git-команду или выход.");
+        outputSink.write("Говори, что мне делать, или спроси список команд.");
 
         while (true) {
             Optional<String> input = inputSource.read();
@@ -55,7 +55,8 @@ public final class AssistantLoop {
             }
 
             String userText = input.get().trim();
-            if (userText.isEmpty()) {
+            if (isBlankCommand(userText)) {
+                outputSink.write("Не расслышал команду. Повтори, пожалуйста.");
                 continue;
             }
             if (isExitCommand(userText)) {
@@ -64,24 +65,26 @@ public final class AssistantLoop {
             }
 
             try {
-                handle(userText);
+                if (!handle(userText)) {
+                    return;
+                }
             } catch (Exception e) {
                 outputSink.write("Ошибка " + e.getMessage());
             }
         }
     }
 
-    private void handle(String userText) throws IOException, InterruptedException {
+    private boolean handle(String userText) throws IOException, InterruptedException {
         if (pendingCommand != null) {
             CommandInterpretation completedCommand = completePendingCommand(userText);
             pendingCommand = null;
             GitResult result = commandExecutor.execute(completedCommand);
             outputSink.write(responseFormatter.format(completedCommand.reply(), result, completedCommand.parameters()));
-            return;
+            return true;
         }
 
         if (tryHandleFastCommand(userText)) {
-            return;
+            return true;
         }
 
         String prompt = promptBuilder.commandInterpretationPrompt(userText);
@@ -92,16 +95,22 @@ public final class AssistantLoop {
         if (interpretation.needInput()) {
             pendingCommand = interpretation;
             outputSink.write(interpretation.reply());
-            return;
+            return true;
+        }
+
+        if (interpretation.action() == CommandAction.EXIT) {
+            outputSink.write(interpretation.reply());
+            return false;
         }
 
         if (interpretation.action() == CommandAction.CHAT || interpretation.action() == CommandAction.UNKNOWN) {
             outputSink.write(interpretation.reply());
-            return;
+            return true;
         }
 
         GitResult result = commandExecutor.execute(interpretation);
         outputSink.write(responseFormatter.format(interpretation.reply(), result, interpretation.parameters()));
+        return true;
     }
 
     private CommandInterpretation completePendingCommand(String userText) {
@@ -153,6 +162,11 @@ public final class AssistantLoop {
             return true;
         }
 
+        if (isHelpPhrase(normalized)) {
+            outputSink.write(helpText());
+            return true;
+        }
+
         if (isStatusPhrase(normalized)) {
             CommandInterpretation status = new CommandInterpretation(
                     CommandAction.STATUS,
@@ -177,6 +191,14 @@ public final class AssistantLoop {
                 || normalized.contains("что поменялось")
                 || normalized.contains("что поменяли")
                 || normalized.contains("рабочем дереве");
+    }
+
+    private boolean isHelpPhrase(String normalized) {
+        return normalized.contains("список команд")
+                || normalized.contains("команды")
+                || normalized.contains("что ты умеешь")
+                || normalized.contains("помощь")
+                || normalized.equals("help");
     }
 
     private boolean isAddCommitPhrase(String normalized) {
@@ -227,6 +249,25 @@ public final class AssistantLoop {
                 || normalized.equals("стоп")
                 || normalized.equals("хватит")
                 || normalized.equals("пока");
+    }
+
+    private boolean isBlankCommand(String userText) {
+        return normalizeCommandText(userText).isBlank();
+    }
+
+    private String helpText() {
+        return """
+                Могу вот что:
+                init — создать репозиторий
+                status — показать изменения
+                add — добавить все изменения
+                commit — сохранить с сообщением
+                add_commit — добавить и сохранить с сообщением
+                branch_create — создать ветку
+                checkout — перейти на ветку
+                push — отправить текущую ветку в origin
+                exit — выключиться
+                """.trim();
     }
 
     private String normalizeCommandText(String text) {
