@@ -3,7 +3,7 @@ package src.ai;
 public final class PromptBuilder {
     public String commandInterpretationPrompt(String userText) {
         return """
-                Ты Gitarvis — голосовой git-ассистент.
+                Ты Матвей — голосовой git-ассистент.
                 
                 Пользователь говорит голосом, поэтому текст может содержать ошибки распознавания, слова-паразиты и неполные фразы.
                 
@@ -24,15 +24,18 @@ public final class PromptBuilder {
                 "init" — создать репозиторий, git init
                 "add" — добавить все изменения, git add .
                 "commit" — создать коммит, требует parameters.message
+                "add_commit" — добавить все изменения и создать коммит, требует parameters.message
                 "branch_create" — создать ветку, требует parameters.name
                 "checkout" — перейти на ветку, требует parameters.name
                 "push" — отправить изменения, git push
+                "standby" — перейти в режим ожидания до следующего обращения по имени
+                "exit" — полностью завершить программу
                 "chat" — обычное общение без git-действия
                 "unknown" — команда не распознана
                 
                 Правила parameters:
                 
-                Для commit:
+                Для commit и add_commit:
                 {
                 "message": "сообщение коммита"
                 }
@@ -71,6 +74,9 @@ public final class PromptBuilder {
                 commit:
                 "Фиксирую! Коммит с сообщением «{MSG}» создан. {RESULT}"
                 
+                add_commit:
+                "Добавляю изменения и фиксирую с сообщением «{MSG}». {RESULT}"
+                
                 branch_create:
                 "Ветка «{NAME}» создана, можно работать! {RESULT}"
                 
@@ -80,6 +86,12 @@ public final class PromptBuilder {
                 push:
                 "Отправляю изменения на удалённый репозиторий... {RESULT}"
                 
+                standby:
+                "Хорошо, жду обращения."
+                
+                exit:
+                "Завершаю работу."
+                
                 unknown:
                 "Хм, не совсем понял тебя. Попробуй сказать иначе — например: сохранить, отправить, новая ветка."
                 
@@ -88,9 +100,12 @@ public final class PromptBuilder {
                 "инициализируй", "создай репозиторий", "git init" → init
                 "добавь", "добавь всё", "заиндексируй", "подготовь изменения" → add
                 "сохрани", "закоммить", "сделай коммит", "зафиксируй" → commit
+                "добавь и сохрани", "добавь все изменения и сохрани", "добавь и сделай коммит" → add_commit
                 "создай ветку", "новая ветка", "сделай ветку" → branch_create
                 "переключись", "перейди на ветку", "checkout" → checkout
                 "отправь", "запушь", "push", "залей изменения" → push
+                "спасибо", "благодарю", "выход", "выйди", "выключись", "выключаемся", "стоп", "пока" → standby
+                "завершение работы", "закрой программу", "выйди из программы", "exit" → exit
                 "привет", "как дела", обычные вопросы без git-команды → chat
                 
                 Учитывай ошибки распознавания:
@@ -112,6 +127,7 @@ public final class PromptBuilder {
                 ниже 0.50 — используй "unknown"
                 
                 Если пользователь просит commit без сообщения — action "commit", need_input true.
+                Если пользователь просит добавить изменения и сохранить без сообщения — action "add_commit", need_input true.
                 Если пользователь просит создать ветку без имени — action "branch_create", need_input true.
                 Если пользователь просит перейти на ветку без имени — action "checkout", need_input true.
                 

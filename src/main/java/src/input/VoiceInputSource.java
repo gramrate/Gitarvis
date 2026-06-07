@@ -22,6 +22,7 @@ public final class VoiceInputSource implements InputSource {
     private static final float SAMPLE_RATE = 16_000.0f;
     private static final int BUFFER_SIZE = 4_096;
     private static final Pattern TEXT_PATTERN = Pattern.compile("\"text\"\\s*:\\s*\"((?:\\\\.|[^\"])*)\"");
+    private static final String HEARD_PREFIX = "Vosk услышал: ";
 
     private final Path modelPath;
     private final Path nativeLibraryPath;
@@ -63,6 +64,7 @@ public final class VoiceInputSource implements InputSource {
             if (recognizer.acceptWaveForm(buffer, bytesRead)) {
                 String text = extractText(recognizer.getResult()).trim();
                 if (!text.isBlank()) {
+                    System.out.println(HEARD_PREFIX + text);
                     return Optional.of(text);
                 }
             }
@@ -70,6 +72,14 @@ public final class VoiceInputSource implements InputSource {
 
         Thread.currentThread().interrupt();
         return Optional.empty();
+    }
+
+    @Override
+    public void close() {
+        microphone.stop();
+        microphone.close();
+        recognizer.close();
+        model.close();
     }
 
     private static TargetDataLine openMicrophone() throws LineUnavailableException {

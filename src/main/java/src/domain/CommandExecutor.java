@@ -42,7 +42,7 @@ public final class CommandExecutor {
             case CHECKOUT -> command.parameter("name").isBlank()
                     ? GitResult.skipped("Нужно имя ветки")
                     : gitRepository.checkout(command.parameter("name"));
-            case HELP, EXIT, CHAT, UNKNOWN -> GitResult.skipped("");
+            case STANDBY, HELP, EXIT, CHAT, UNKNOWN -> GitResult.skipped("");
         };
     }
 }

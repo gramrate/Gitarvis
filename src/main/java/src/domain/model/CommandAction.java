@@ -13,6 +13,7 @@ public enum CommandAction {
     BRANCH,
     BRANCH_CREATE,
     CHECKOUT,
+    STANDBY,
     HELP,
     EXIT,
     CHAT,

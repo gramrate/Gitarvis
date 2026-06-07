@@ -9,6 +9,8 @@ import java.util.ArrayList;
 import java.util.List;
 
 public final class GitRepository {
+    private static final String BOT_COMMIT_SUFFIX = " (made by GJ)";
+
     private final Path workingDirectory;
 
     public GitRepository(Path workingDirectory) {
@@ -40,7 +42,7 @@ public final class GitRepository {
     }
 
     public GitResult commit(String message) throws IOException, InterruptedException {
-        return git("commit", "-m", message);
+        return git("commit", "-m", withBotCommitSuffix(message));
     }
 
     public GitResult addAndCommit(String message) throws IOException, InterruptedException {
@@ -106,5 +108,13 @@ public final class GitRepository {
             return first;
         }
         return first.trim() + System.lineSeparator() + second.trim();
+    }
+
+    private static String withBotCommitSuffix(String message) {
+        String trimmed = message == null ? "" : message.trim();
+        if (trimmed.endsWith(BOT_COMMIT_SUFFIX)) {
+            return trimmed;
+        }
+        return trimmed + BOT_COMMIT_SUFFIX;
     }
 }

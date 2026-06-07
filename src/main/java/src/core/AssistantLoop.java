@@ -18,6 +18,11 @@ import java.util.Map;
 import java.util.Optional;
 
 public final class AssistantLoop {
+    private enum AssistantState {
+        WAITING,
+        ACTIVE
+    }
+
     private final InputSource inputSource;
     private final OutputSink outputSink;
     private final AiGateway aiGateway;
@@ -26,6 +31,7 @@ public final class AssistantLoop {
     private final CommandExecutor commandExecutor;
     private final ResponseFormatter responseFormatter;
     private CommandInterpretation pendingCommand;
+    private AssistantState state = AssistantState.WAITING;
 
     public AssistantLoop(
             InputSource inputSource,
@@ -46,32 +52,90 @@ public final class AssistantLoop {
     }
 
     public void run() {
-        outputSink.write("Говори, что мне делать, или спроси список команд.");
+        outputSink.write("Я в режиме ожидания.");
 
-        while (true) {
-            Optional<String> input = inputSource.read();
-            if (input.isEmpty()) {
-                return;
-            }
-
-            String userText = input.get().trim();
-            if (isBlankCommand(userText)) {
-                outputSink.write("Не расслышал команду. Повтори, пожалуйста.");
-                continue;
-            }
-            if (isExitCommand(userText)) {
-                outputSink.write("Выключаюсь. Если что — зови, я рядом с git.");
-                return;
-            }
-
-            try {
-                if (!handle(userText)) {
+        try {
+            while (true) {
+                Optional<String> input = inputSource.read();
+                if (input.isEmpty()) {
                     return;
                 }
-            } catch (Exception e) {
-                outputSink.write("Ошибка " + e.getMessage());
+
+                String userText = input.get().trim();
+                if (isBlankCommand(userText)) {
+                    if (state == AssistantState.ACTIVE) {
+                        outputSink.write("Не расслышал команду. Повтори, пожалуйста.");
+                    }
+                    continue;
+                }
+
+                try {
+                    StateResult stateResult = handleState(userText);
+                    if (stateResult == StateResult.EXIT) {
+                        outputSink.write("Завершаю работу.");
+                        return;
+                    }
+                    if (stateResult == StateResult.CONSUMED) {
+                        continue;
+                    }
+                    if (state == AssistantState.WAITING) {
+                        continue;
+                    }
+                } catch (Exception e) {
+                    outputSink.write("Ошибка " + e.getMessage());
+                    continue;
+                }
+
+                if (isProgramExitCommand(userText)) {
+                    outputSink.write("Выключаюсь. Если что — зови, я рядом с git.");
+                    return;
+                }
+
+                try {
+                    if (!handle(userText)) {
+                        return;
+                    }
+                } catch (Exception e) {
+                    outputSink.write("Ошибка " + e.getMessage());
+                }
             }
+        } finally {
+            inputSource.close();
         }
+    }
+
+    private StateResult handleState(String userText) throws IOException, InterruptedException {
+        String normalized = normalizeCommandText(userText);
+        if (isProgramExitCommand(normalized)) {
+            return StateResult.EXIT;
+        }
+
+        if (state == AssistantState.WAITING) {
+            if (hasWakeName(normalized)) {
+                state = AssistantState.ACTIVE;
+                String commandAfterName = removeWakeName(userText).trim();
+                outputSink.write("Я в активном режиме.");
+                if (isBlankCommand(commandAfterName) || isWakeOnlyRemainder(commandAfterName)) {
+                    outputSink.write("Я тут, слушаю вас.");
+                    return StateResult.CONSUMED;
+                }
+                return handle(commandAfterName) ? StateResult.CONSUMED : StateResult.EXIT;
+            }
+            return StateResult.CONSUMED;
+        }
+
+        if (isStandbyCommand(normalized)) {
+            pendingCommand = null;
+            state = AssistantState.WAITING;
+            outputSink.write("Я в режиме ожидания.");
+            return StateResult.CONSUMED;
+        }
+
+        if (hasWakeName(normalized)) {
+            return StateResult.PASS_TO_COMMANDS;
+        }
+
+        return StateResult.PASS_TO_COMMANDS;
     }
 
     private boolean handle(String userText) throws IOException, InterruptedException {
@@ -92,7 +156,7 @@ public final class AssistantLoop {
         }
 
         String prompt = promptBuilder.commandInterpretationPrompt(userText);
-        outputSink.write("Gitarvis думает");
+        outputSink.write("Матвей думает");
         String aiResponse = aiGateway.complete(prompt);
         CommandInterpretation interpretation = commandParser.parse(aiResponse);
 
@@ -102,8 +166,21 @@ public final class AssistantLoop {
             return true;
         }
 
+        if (requiresMissingInput(interpretation)) {
+            pendingCommand = withMissingInput(interpretation);
+            outputSink.write(pendingCommand.reply());
+            return true;
+        }
+
+        if (interpretation.action() == CommandAction.STANDBY) {
+            pendingCommand = null;
+            state = AssistantState.WAITING;
+            outputSink.write("Я в режиме ожидания.");
+            return true;
+        }
+
         if (interpretation.action() == CommandAction.EXIT) {
-            outputSink.write(interpretation.reply());
+            outputSink.write(interpretation.reply() == null || interpretation.reply().isBlank() ? "Завершаю работу." : interpretation.reply());
             return false;
         }
 
@@ -139,6 +216,30 @@ public final class AssistantLoop {
         }
 
         return new CommandInterpretation(pendingCommand.action(), parameters, pendingCommand.confidence(), reply, false);
+    }
+
+    private boolean requiresMissingInput(CommandInterpretation interpretation) {
+        return switch (interpretation.action()) {
+            case COMMIT, ADD_COMMIT -> interpretation.parameter("message").isBlank();
+            case BRANCH_CREATE, CHECKOUT -> interpretation.parameter("name").isBlank();
+            default -> false;
+        };
+    }
+
+    private CommandInterpretation withMissingInput(CommandInterpretation interpretation) {
+        String reply = switch (interpretation.action()) {
+            case COMMIT, ADD_COMMIT -> "Скажи сообщение для коммита — что пишем?";
+            case BRANCH_CREATE -> "Как назвать новую ветку?";
+            case CHECKOUT -> "На какую ветку переключиться?";
+            default -> interpretation.reply();
+        };
+        return new CommandInterpretation(
+                interpretation.action(),
+                interpretation.parameters(),
+                interpretation.confidence(),
+                reply,
+                true
+        );
     }
 
     private boolean tryHandleFastCommand(String userText) throws IOException, InterruptedException {
@@ -241,18 +342,88 @@ public final class AssistantLoop {
         return userText.substring(markerIndex + marker.length()).trim();
     }
 
-    private boolean isExitCommand(String userText) {
+    private boolean isProgramExitCommand(String userText) {
         String normalized = normalizeCommandText(userText);
         return normalized.equals("exit")
                 || normalized.equals("quit")
+                || normalized.equals("завершение работы")
+                || normalized.equals("заверши работу")
+                || normalized.equals("завершить работу")
+                || normalized.equals("закрой программу")
+                || normalized.equals("выключи программу")
+                || normalized.equals("выйди из программы");
+    }
+
+    private boolean isStandbyCommand(String normalized) {
+        return normalized.equals("спасибо")
+                || normalized.startsWith("спасибо ")
                 || normalized.equals("выход")
                 || normalized.equals("выйти")
+                || normalized.equals("выйди")
+                || normalized.equals("выключись")
+                || normalized.equals("выключайся")
+                || normalized.equals("выключаемся")
                 || normalized.equals("закройся")
                 || normalized.equals("завершить")
                 || normalized.equals("остановись")
                 || normalized.equals("стоп")
                 || normalized.equals("хватит")
                 || normalized.equals("пока");
+    }
+
+    private boolean hasWakeName(String normalized) {
+        for (String token : normalized.split("\\s+")) {
+            if (isWakeNameToken(token)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private String removeWakeName(String text) {
+        StringBuilder withoutName = new StringBuilder();
+        for (String token : normalizeCommandText(text).split("\\s+")) {
+            if (!isWakeNameToken(token)) {
+                withoutName.append(token).append(' ');
+            }
+        }
+        return withoutName.toString().trim();
+    }
+
+    private boolean isWakeOnlyRemainder(String text) {
+        String normalized = normalizeCommandText(text);
+        if (normalized.isBlank()) {
+            return true;
+        }
+
+        for (String token : normalized.split("\\s+")) {
+            if (!isWakeNoiseToken(token)) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    private boolean isWakeNoiseToken(String token) {
+        return token.equals("а")
+                || token.equals("э")
+                || token.equals("ээ")
+                || token.equals("эм")
+                || token.equals("мм")
+                || token.equals("ну")
+                || token.equals("алло")
+                || token.equals("слушай")
+                || token.equals("пожалуйста");
+    }
+
+    private boolean isWakeNameToken(String token) {
+        return token.startsWith("матве")
+                || token.startsWith("мотве")
+                || token.startsWith("мэтве")
+                || token.startsWith("метве")
+                || token.equals("мат")
+                || token.equals("мэт")
+                || token.equals("мет");
     }
 
     private boolean isBlankCommand(String userText) {
@@ -274,7 +445,8 @@ public final class AssistantLoop {
                 branch_create — создать ветку
                 checkout — перейти на ветку
                 push — отправить текущую ветку в origin
-                exit — выключиться
+                спасибо / стоп — перейти в режим ожидания
+                завершение работы — закрыть программу
                 """.trim();
     }
 
@@ -284,5 +456,11 @@ public final class AssistantLoop {
                 .replace("—", " ")
                 .replaceAll("\\s+", " ")
                 .trim();
+    }
+
+    private enum StateResult {
+        PASS_TO_COMMANDS,
+        CONSUMED,
+        EXIT
     }
 }
