@@ -185,7 +185,7 @@ public final class AssistantLoop {
         }
 
         if (interpretation.action() == CommandAction.CHAT || interpretation.action() == CommandAction.UNKNOWN) {
-            outputSink.write(interpretation.reply());
+            outputSink.write(cleanPlainReply(interpretation.reply()));
             return true;
         }
 
@@ -216,6 +216,17 @@ public final class AssistantLoop {
         }
 
         return new CommandInterpretation(pendingCommand.action(), parameters, pendingCommand.confidence(), reply, false);
+    }
+
+    private String cleanPlainReply(String reply) {
+        if (reply == null || reply.isBlank()) {
+            return "";
+        }
+        return reply.replace("{RESULT}", "")
+                .replace("{MSG}", "")
+                .replace("{NAME}", "")
+                .replaceAll("\\s+", " ")
+                .trim();
     }
 
     private boolean requiresMissingInput(CommandInterpretation interpretation) {
