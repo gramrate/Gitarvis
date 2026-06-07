@@ -42,6 +42,16 @@ final class AutoCommandUtilsTest {
     }
 
     @Test
+    void detectsPushPhrases() {
+        for (String phrase : java.util.List.of("отправь", "push", "запушь", "залей изменения")) {
+            Optional<CommandInterpretation> command = AutoCommandUtils.detect(phrase);
+
+            assertTrue(command.isPresent(), phrase);
+            assertEquals(CommandAction.PUSH, command.get().action(), phrase);
+        }
+    }
+
+    @Test
     void detectsAddCommitWithoutMessageAsNeedInput() {
         CommandInterpretation command = AutoCommandUtils.detect("добавь и сохрани").orElseThrow();
 
@@ -91,6 +101,7 @@ final class AutoCommandUtilsTest {
     void analyzesStandbyAndProgramExit() {
         assertTrue(AutoCommandUtils.analyze("спасибо матвей").standby());
         assertTrue(AutoCommandUtils.analyze("завершение работы").programExit());
+        assertTrue(AutoCommandUtils.analyze("завершения работы").programExit());
         assertFalse(AutoCommandUtils.analyze("покажи статус").programExit());
     }
 
