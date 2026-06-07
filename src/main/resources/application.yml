@@ -8,5 +8,5 @@ ai:
   requestTimeoutSeconds: 120
 
 vosk:
-  modelPath: "models/vosk-model-small-ru-0.22"
+  modelPath: "models/vosk-model-small-ru"
   nativeLibraryPath: ""

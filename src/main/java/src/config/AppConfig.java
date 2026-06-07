@@ -15,7 +15,7 @@ public record AppConfig(AiConfig ai, VoskConfig vosk) {
                         intValue(values, "ai.requestTimeoutSeconds", 120)
                 ),
                 new VoskConfig(
-                        value(values, "vosk.modelPath", "models/vosk-model-small-ru-0.22"),
+                        value(values, "vosk.modelPath", "models/vosk-model-small-ru"),
                         value(values, "vosk.nativeLibraryPath", "")
                 )
         );

@@ -10,7 +10,7 @@ import src.domain.CommandExecutor;
 import src.domain.CommandParser;
 import src.git.GitRepository;
 import src.input.InputSource;
-import src.input.TextInputSource;
+import src.input.VoiceInputSource;
 import src.output.ConsolePrinter;
 import src.output.OutputSink;
 import src.output.ResponseFormatter;
@@ -25,7 +25,7 @@ public final class Main {
         AppConfig config = YamlConfigLoader.load();
         Path repositoryPath = Path.of(System.getProperty("user.dir"));
 
-        InputSource input = new TextInputSource(System.in);
+        InputSource input = new VoiceInputSource(config.vosk());
         OutputSink output = new ConsolePrinter(System.out);
         AiGateway aiGateway = QwenGateway.fromConfig(config.ai());
 
