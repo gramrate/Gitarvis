@@ -7,6 +7,7 @@ public enum CommandAction {
     DIFF,
     ADD,
     COMMIT,
+    ADD_COMMIT,
     PUSH,
     PULL,
     BRANCH,

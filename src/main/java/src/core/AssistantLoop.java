@@ -13,6 +13,7 @@ import src.output.ResponseFormatter;
 
 import java.io.IOException;
 import java.util.LinkedHashMap;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 
@@ -45,7 +46,7 @@ public final class AssistantLoop {
     }
 
     public void run() {
-        outputSink.write("Gitarvis ready. Type a git request or 'exit'.");
+        outputSink.write("Gitarvis готов. Говори git-команду или выход.");
 
         while (true) {
             Optional<String> input = inputSource.read();
@@ -57,15 +58,15 @@ public final class AssistantLoop {
             if (userText.isEmpty()) {
                 continue;
             }
-            if ("exit".equalsIgnoreCase(userText) || "quit".equalsIgnoreCase(userText)) {
-                outputSink.write("Bye.");
+            if (isExitCommand(userText)) {
+                outputSink.write("Выключаюсь. Если что — зови, я рядом с git.");
                 return;
             }
 
             try {
                 handle(userText);
             } catch (Exception e) {
-                outputSink.write("Error: " + e.getMessage());
+                outputSink.write("Ошибка " + e.getMessage());
             }
         }
     }
@@ -79,7 +80,12 @@ public final class AssistantLoop {
             return;
         }
 
+        if (tryHandleFastCommand(userText)) {
+            return;
+        }
+
         String prompt = promptBuilder.commandInterpretationPrompt(userText);
+        outputSink.write("Gitarvis думает");
         String aiResponse = aiGateway.complete(prompt);
         CommandInterpretation interpretation = commandParser.parse(aiResponse);
 
@@ -102,7 +108,7 @@ public final class AssistantLoop {
         Map<String, String> parameters = new LinkedHashMap<>(pendingCommand.parameters());
         String value = userText.trim();
 
-        if (pendingCommand.action() == CommandAction.COMMIT) {
+        if (pendingCommand.action() == CommandAction.COMMIT || pendingCommand.action() == CommandAction.ADD_COMMIT) {
             parameters.put("message", value);
         } else if (pendingCommand.action() == CommandAction.BRANCH_CREATE || pendingCommand.action() == CommandAction.CHECKOUT) {
             parameters.put("name", value);
@@ -111,6 +117,8 @@ public final class AssistantLoop {
         String reply = pendingCommand.reply();
         if (pendingCommand.action() == CommandAction.COMMIT) {
             reply = "Фиксирую! Коммит с сообщением «{MSG}» создан. {RESULT}";
+        } else if (pendingCommand.action() == CommandAction.ADD_COMMIT) {
+            reply = "Добавляю изменения и фиксирую с сообщением «{MSG}». {RESULT}";
         } else if (pendingCommand.action() == CommandAction.BRANCH_CREATE) {
             reply = "Ветка «{NAME}» создана, можно работать! {RESULT}";
         } else if (pendingCommand.action() == CommandAction.CHECKOUT) {
@@ -118,5 +126,114 @@ public final class AssistantLoop {
         }
 
         return new CommandInterpretation(pendingCommand.action(), parameters, pendingCommand.confidence(), reply, false);
+    }
+
+    private boolean tryHandleFastCommand(String userText) throws IOException, InterruptedException {
+        String normalized = normalizeCommandText(userText);
+        if (isAddCommitPhrase(normalized)) {
+            String message = extractCommitMessage(userText);
+            CommandInterpretation addCommit = new CommandInterpretation(
+                    CommandAction.ADD_COMMIT,
+                    message.isBlank() ? Map.of() : Map.of("message", message),
+                    1.0,
+                    message.isBlank()
+                            ? "Добавлю и сохраню. Только скажи сообщение для коммита — что пишем?"
+                            : "Добавляю изменения и фиксирую с сообщением «{MSG}». {RESULT}",
+                    message.isBlank()
+            );
+
+            if (addCommit.needInput()) {
+                pendingCommand = addCommit;
+                outputSink.write(addCommit.reply());
+                return true;
+            }
+
+            GitResult result = commandExecutor.execute(addCommit);
+            outputSink.write(responseFormatter.format(addCommit.reply(), result, addCommit.parameters()));
+            return true;
+        }
+
+        if (isStatusPhrase(normalized)) {
+            CommandInterpretation status = new CommandInterpretation(
+                    CommandAction.STATUS,
+                    Map.of(),
+                    1.0,
+                    "Смотрю, что у нас в рабочем дереве... {RESULT}",
+                    false
+            );
+            GitResult result = commandExecutor.execute(status);
+            outputSink.write(responseFormatter.format(status.reply(), result, status.parameters()));
+            return true;
+        }
+        return false;
+    }
+
+    private boolean isStatusPhrase(String normalized) {
+        return normalized.contains("статус")
+                || normalized.contains("status")
+                || (normalized.contains("есть") && normalized.contains("измен"))
+                || normalized.contains("какие изменения")
+                || normalized.contains("что измен")
+                || normalized.contains("что поменялось")
+                || normalized.contains("что поменяли")
+                || normalized.contains("рабочем дереве");
+    }
+
+    private boolean isAddCommitPhrase(String normalized) {
+        boolean hasAdd = normalized.contains("добав") || normalized.contains("add");
+        boolean hasCommit = normalized.contains("сохран")
+                || normalized.contains("сохрани")
+                || normalized.contains("созран")
+                || normalized.contains("коммит")
+                || normalized.contains("commit");
+        return hasAdd && hasCommit;
+    }
+
+    private String extractCommitMessage(String userText) {
+        String normalized = userText.toLowerCase(Locale.ROOT);
+        String[] markers = {
+                "с сообщением",
+                "сообщением",
+                "message",
+                "месседжем"
+        };
+
+        int markerIndex = -1;
+        String marker = "";
+        for (String candidate : markers) {
+            int index = normalized.indexOf(candidate);
+            if (index >= 0 && (markerIndex < 0 || index < markerIndex)) {
+                markerIndex = index;
+                marker = candidate;
+            }
+        }
+
+        if (markerIndex < 0) {
+            return "";
+        }
+
+        return userText.substring(markerIndex + marker.length()).trim();
+    }
+
+    private boolean isExitCommand(String userText) {
+        String normalized = normalizeCommandText(userText);
+        return normalized.equals("exit")
+                || normalized.equals("quit")
+                || normalized.equals("выход")
+                || normalized.equals("выйти")
+                || normalized.equals("закройся")
+                || normalized.equals("завершить")
+                || normalized.equals("остановись")
+                || normalized.equals("стоп")
+                || normalized.equals("хватит")
+                || normalized.equals("пока");
+    }
+
+    private String normalizeCommandText(String text) {
+        return text.toLowerCase(Locale.ROOT)
+                .replaceAll("[.!?,…:;«»]", " ")
+                .replace("—", " ")
+                .replaceAll("\\s+", " ")
+                .trim();
     }
 }

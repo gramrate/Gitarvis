@@ -10,8 +10,9 @@ public record AppConfig(AiConfig ai, VoskConfig vosk) {
                         value(values, "ai.apiKey", ""),
                         value(values, "ai.model", "qwen2.5:3b"),
                         doubleValue(values, "ai.temperature", 0.1),
+                        intValue(values, "ai.maxTokens", 160),
                         intValue(values, "ai.connectTimeoutSeconds", 20),
-                        intValue(values, "ai.requestTimeoutSeconds", 60)
+                        intValue(values, "ai.requestTimeoutSeconds", 50)
                 ),
                 new VoskConfig(
                         value(values, "vosk.modelPath", "models/vosk-model-small-ru-0.22"),
@@ -40,6 +41,7 @@ public record AppConfig(AiConfig ai, VoskConfig vosk) {
             String apiKey,
             String model,
             double temperature,
+            int maxTokens,
             int connectTimeoutSeconds,
             int requestTimeoutSeconds
     ) {

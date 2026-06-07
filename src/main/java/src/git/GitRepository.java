@@ -43,8 +43,24 @@ public final class GitRepository {
         return git("commit", "-m", message);
     }
 
+    public GitResult addAndCommit(String message) throws IOException, InterruptedException {
+        GitResult addResult = add(List.of("."));
+        if (!addResult.success()) {
+            return addResult;
+        }
+
+        GitResult commitResult = commit(message);
+        String output = joinOutput(addResult.output(), commitResult.output());
+        return new GitResult(commitResult.success(), commitResult.exitCode(), output);
+    }
+
     public GitResult push() throws IOException, InterruptedException {
-        return git("push");
+        GitResult branchResult = git("branch", "--show-current");
+        if (!branchResult.success() || branchResult.output().isBlank()) {
+            return new GitResult(false, branchResult.exitCode(), "Не могу определить текущую ветку\n" + branchResult.output());
+        }
+        String currentBranch = branchResult.output().trim();
+        return git("push", "origin", currentBranch);
     }
 
     public GitResult pull() throws IOException, InterruptedException {
@@ -80,5 +96,15 @@ public final class GitRepository {
         byte[] output = process.getInputStream().readAllBytes();
         int exitCode = process.waitFor();
         return new GitResult(exitCode == 0, exitCode, new String(output, StandardCharsets.UTF_8));
+    }
+
+    private static String joinOutput(String first, String second) {
+        if (first == null || first.isBlank()) {
+            return second;
+        }
+        if (second == null || second.isBlank()) {
+            return first;
+        }
+        return first.trim() + System.lineSeparator() + second.trim();
     }
 }

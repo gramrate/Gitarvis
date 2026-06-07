@@ -15,9 +15,10 @@ public final class QwenGateway implements AiGateway {
     private final String apiKey;
     private final String model;
     private final double temperature;
+    private final int maxTokens;
     private final Duration requestTimeout;
 
-    public QwenGateway(String baseUrl, String apiKey, String model, double temperature, Duration connectTimeout, Duration requestTimeout) {
+    public QwenGateway(String baseUrl, String apiKey, String model, double temperature, int maxTokens, Duration connectTimeout, Duration requestTimeout) {
         if (baseUrl == null || baseUrl.isBlank()) {
             throw new IllegalArgumentException("ai.baseUrl is not set.");
         }
@@ -31,6 +32,7 @@ public final class QwenGateway implements AiGateway {
         this.apiKey = apiKey == null ? "" : apiKey;
         this.model = model;
         this.temperature = temperature;
+        this.maxTokens = maxTokens;
         this.requestTimeout = requestTimeout;
     }
 
@@ -40,6 +42,7 @@ public final class QwenGateway implements AiGateway {
                 config.apiKey(),
                 config.model(),
                 config.temperature(),
+                config.maxTokens(),
                 Duration.ofSeconds(config.connectTimeoutSeconds()),
                 Duration.ofSeconds(config.requestTimeoutSeconds())
         );
@@ -56,9 +59,10 @@ public final class QwenGateway implements AiGateway {
                       "content": "%s"
                     }
                   ],
-                  "temperature": %s
+                  "temperature": %s,
+                  "max_tokens": %s
                 }
-                """.formatted(jsonEscape(model), jsonEscape(prompt), temperature);
+                """.formatted(jsonEscape(model), jsonEscape(prompt), temperature, maxTokens);
 
         HttpRequest.Builder requestBuilder = HttpRequest.newBuilder(endpoint)
                 .timeout(requestTimeout)

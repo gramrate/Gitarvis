@@ -7,7 +7,7 @@ public record GitResult(boolean success, int exitCode, String output) {
 
     public String resultText() {
         if (output == null || output.isBlank()) {
-            return success ? "Command completed successfully." : "Command failed with exit code " + exitCode + ".";
+            return success ? "Команда выполнена успешно" : "Команда завершилась с кодом " + exitCode;
         }
         return output.trim();
     }

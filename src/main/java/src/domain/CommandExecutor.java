@@ -28,16 +28,19 @@ public final class CommandExecutor {
             case DIFF -> gitRepository.diff(List.of());
             case ADD -> gitRepository.add(List.of("."));
             case COMMIT -> command.parameter("message").isBlank()
-                    ? GitResult.skipped("Commit message is required.")
+                    ? GitResult.skipped("Нужно сообщение для коммита")
                     : gitRepository.commit(command.parameter("message"));
+            case ADD_COMMIT -> command.parameter("message").isBlank()
+                    ? GitResult.skipped("Нужно сообщение для коммита")
+                    : gitRepository.addAndCommit(command.parameter("message"));
             case PUSH -> gitRepository.push();
             case PULL -> gitRepository.pull();
             case BRANCH -> gitRepository.branch();
             case BRANCH_CREATE -> command.parameter("name").isBlank()
-                    ? GitResult.skipped("Branch name is required.")
+                    ? GitResult.skipped("Нужно имя ветки")
                     : gitRepository.branchCreate(command.parameter("name"));
             case CHECKOUT -> command.parameter("name").isBlank()
-                    ? GitResult.skipped("Branch name is required.")
+                    ? GitResult.skipped("Нужно имя ветки")
                     : gitRepository.checkout(command.parameter("name"));
             case CHAT, UNKNOWN -> GitResult.skipped("");
         };

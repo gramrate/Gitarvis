@@ -3,8 +3,9 @@ ai:
   apiKey: ""
   model: "qwen2.5:3b"
   temperature: 0.1
+  maxTokens: 160
   connectTimeoutSeconds: 20
-  requestTimeoutSeconds: 60
+  requestTimeoutSeconds: 50
 
 vosk:
   modelPath: "models/vosk-model-small-ru-0.22"

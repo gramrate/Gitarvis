@@ -48,8 +48,9 @@ ai:
   apiKey: ""
   model: "qwen2.5:3b"
   temperature: 0.1
+  maxTokens: 160
   connectTimeoutSeconds: 20
-  requestTimeoutSeconds: 60
+  requestTimeoutSeconds: 50
 
 vosk:
   modelPath: "models/vosk-model-small-ru-0.22"
@@ -104,12 +105,16 @@ java -cp target/classes src.Main
 покажи diff
 добавь все файлы
 сделай коммит с сообщением initial structure
+добавь и сохрани с сообщением Обновил все поля
 ```
 
 Для выхода:
 
 ```text
 exit
+выйти
+стоп
+пока
 ```
 
 ## Команды Gitarvis
@@ -117,11 +122,13 @@ exit
 LLM возвращает JSON с действием, параметрами и текстом ответа. Поддерживаются команды:
 
 - `init` — `git init`
+- `status` — `git status`
 - `add` — `git add .`
 - `commit` — `git commit -m "..."`
+- `add_commit` — `git add .`, затем `git commit -m "..."`
 - `branch_create` — создать ветку, нужен `parameters.name`
 - `checkout` — перейти на ветку, нужен `parameters.name`
-- `push` — `git push`
+- `push` — `git push origin <текущая-ветка>`
 - `chat` — обычный разговор без git-действия
 - `unknown` — команда не распознана
 
