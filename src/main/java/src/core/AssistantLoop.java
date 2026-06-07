@@ -76,6 +76,10 @@ public final class AssistantLoop {
 
     private boolean handle(String userText) throws IOException, InterruptedException {
         if (pendingCommand != null) {
+            if (hasBrokenText(userText)) {
+                outputSink.write("Сообщение выглядит битым. Повтори, пожалуйста, я не хочу делать коммит с кашей в названии.");
+                return true;
+            }
             CommandInterpretation completedCommand = completePendingCommand(userText);
             pendingCommand = null;
             GitResult result = commandExecutor.execute(completedCommand);
@@ -253,6 +257,10 @@ public final class AssistantLoop {
 
     private boolean isBlankCommand(String userText) {
         return normalizeCommandText(userText).isBlank();
+    }
+
+    private boolean hasBrokenText(String userText) {
+        return userText.indexOf('\uFFFD') >= 0;
     }
 
     private String helpText() {
