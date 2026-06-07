@@ -31,6 +31,17 @@ final class AutoCommandUtilsTest {
     }
 
     @Test
+    void detectsLogPhrases() {
+        for (String phrase : java.util.List.of("git logs", "логи", "покажи последние коммиты", "последние десять коммитов")) {
+            Optional<CommandInterpretation> command = AutoCommandUtils.detect(phrase);
+
+            assertTrue(command.isPresent(), phrase);
+            assertEquals(CommandAction.LOG, command.get().action(), phrase);
+            assertTrue(command.get().reply().contains("10"));
+        }
+    }
+
+    @Test
     void detectsAddCommitWithoutMessageAsNeedInput() {
         CommandInterpretation command = AutoCommandUtils.detect("добавь и сохрани").orElseThrow();
 

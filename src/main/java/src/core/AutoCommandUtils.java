@@ -74,6 +74,16 @@ public final class AutoCommandUtils {
             ));
         }
 
+        if (isLogPhrase(normalized)) {
+            return Optional.of(new CommandInterpretation(
+                    CommandAction.LOG,
+                    Map.of(),
+                    1.0,
+                    "Показываю последние 10 коммитов... {RESULT}",
+                    false
+            ));
+        }
+
         return Optional.empty();
     }
 
@@ -171,6 +181,20 @@ public final class AutoCommandUtils {
                 || normalized.contains("рабочем дереве");
     }
 
+    private static boolean isLogPhrase(String normalized) {
+        return normalized.equals("git logs")
+                || normalized.equals("git log")
+                || normalized.contains("логи")
+                || normalized.contains("лог")
+                || normalized.contains("история")
+                || normalized.contains("последние коммиты")
+                || normalized.contains("последних коммита")
+                || normalized.contains("последние десять коммитов")
+                || normalized.contains("последние 10 коммитов")
+                || normalized.contains("последние три коммита")
+                || normalized.contains("последние 3 коммита");
+    }
+
     private static boolean isHelpPhrase(String normalized) {
         return normalized.contains("список команд")
                 || normalized.contains("команды")
@@ -220,6 +244,7 @@ public final class AutoCommandUtils {
                 Могу вот что:
                 init — создать репозиторий
                 status — показать изменения
+                log — показать последние 10 коммитов
                 add — добавить все изменения
                 commit — сохранить с сообщением
                 add_commit — добавить и сохранить с сообщением

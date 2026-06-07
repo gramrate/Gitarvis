@@ -56,6 +56,26 @@ final class GitRepositoryTest {
     }
 
     @Test
+    void logReturnsOnlyLastTenCommits() throws Exception {
+        GitRepository repository = new GitRepository(repoDir);
+        assertTrue(repository.init().success());
+        configureGitUser(repoDir);
+
+        for (int i = 1; i <= 12; i++) {
+            Files.writeString(repoDir.resolve("file.txt"), "content " + i + "\n");
+            assertTrue(repository.add(java.util.List.of(".")).success());
+            assertTrue(repository.commit("commit " + i).success());
+        }
+
+        String output = repository.log().output();
+
+        assertEquals(10, output.lines().count());
+        assertTrue(output.contains("commit 12 (made by GJ)"));
+        assertTrue(output.contains("commit 3 (made by GJ)"));
+        assertEquals(false, output.contains("commit 2 (made by GJ)"));
+    }
+
+    @Test
     void pushFailsCleanlyWithoutBranchOrRemote() throws Exception {
         GitRepository repository = new GitRepository(repoDir);
         assertTrue(repository.init().success());
