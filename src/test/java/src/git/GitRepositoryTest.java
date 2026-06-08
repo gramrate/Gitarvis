@@ -56,6 +56,21 @@ final class GitRepositoryTest {
     }
 
     @Test
+    void statusReportsNoChangesForCleanWorkingTree() throws Exception {
+        GitRepository repository = new GitRepository(repoDir);
+        assertTrue(repository.init().success());
+        configureGitUser(repoDir);
+        Files.writeString(repoDir.resolve("file.txt"), "content\n");
+        assertTrue(repository.add(java.util.List.of(".")).success());
+        assertTrue(repository.commit("initial").success());
+
+        GitResult status = repository.status();
+
+        assertTrue(status.success());
+        assertEquals("Изменений нет", status.output());
+    }
+
+    @Test
     void pushFailsCleanlyWithoutBranchOrRemote() throws Exception {
         GitRepository repository = new GitRepository(repoDir);
         assertTrue(repository.init().success());

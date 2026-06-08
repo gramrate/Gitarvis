@@ -22,7 +22,11 @@ public final class GitRepository {
     }
 
     public GitResult status() throws IOException, InterruptedException {
-        return git("status", "--short");
+        GitResult result = git("status", "--short");
+        if (result.success() && result.output().isBlank()) {
+            return new GitResult(true, result.exitCode(), "Изменений нет");
+        }
+        return result;
     }
 
     public GitResult log() throws IOException, InterruptedException {
