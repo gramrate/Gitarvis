@@ -74,6 +74,16 @@ public final class AutoCommandUtils {
             ));
         }
 
+        if (isPullPhrase(normalized)) {
+            return Optional.of(new CommandInterpretation(
+                    CommandAction.PULL,
+                    Map.of(),
+                    1.0,
+                    "Загружаю изменения из удалённого репозитория... {RESULT}",
+                    false
+            ));
+        }
+
         return Optional.empty();
     }
 
@@ -179,6 +189,18 @@ public final class AutoCommandUtils {
                 || normalized.equals("help");
     }
 
+    private static boolean isPullPhrase(String normalized) {
+        return normalized.contains("git pull")
+                || normalized.equals("pull")
+                || normalized.contains("загрузить изменения")
+                || normalized.contains("загрузи изменения")
+                || normalized.contains("загружай изменения")
+                || normalized.contains("скачай изменения")
+                || normalized.contains("подтяни изменения")
+                || normalized.contains("получи изменения")
+                || normalized.contains("обнови изменения");
+    }
+
     private static boolean isAddCommitPhrase(String normalized) {
         boolean hasAdd = normalized.contains("добав") || normalized.contains("add");
         boolean hasCommit = normalized.contains("сохран")
@@ -225,6 +247,7 @@ public final class AutoCommandUtils {
                 add_commit — добавить и сохранить с сообщением
                 branch_create — создать ветку
                 checkout — перейти на ветку
+                pull — загрузить изменения из origin
                 push — отправить текущую ветку в origin
                 спасибо / стоп — перейти в режим ожидания
                 завершение работы — закрыть программу

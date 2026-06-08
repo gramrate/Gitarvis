@@ -31,6 +31,17 @@ final class AutoCommandUtilsTest {
     }
 
     @Test
+    void detectsPullPhrases() {
+        for (String phrase : java.util.List.of("загрузить изменения", "загрузи изменения", "подтяни изменения", "git pull", "pull")) {
+            Optional<CommandInterpretation> command = AutoCommandUtils.detect(phrase);
+
+            assertTrue(command.isPresent(), phrase);
+            assertEquals(CommandAction.PULL, command.get().action(), phrase);
+            assertTrue(command.get().reply().contains("Загружаю изменения"));
+        }
+    }
+
+    @Test
     void detectsAddCommitWithoutMessageAsNeedInput() {
         CommandInterpretation command = AutoCommandUtils.detect("добавь и сохрани").orElseThrow();
 

@@ -23,6 +23,7 @@ final class PromptBuilderTest {
         String prompt = promptBuilder.commandInterpretationPrompt("добавь и сохрани");
 
         assertTrue(prompt.contains("\"add_commit\""));
+        assertTrue(prompt.contains("\"pull\""));
         assertTrue(prompt.contains("\"standby\""));
         assertTrue(prompt.contains("\"exit\""));
         assertTrue(prompt.contains("Если пользователь просит добавить изменения и сохранить без сообщения"));
