@@ -192,6 +192,7 @@ public final class AutoCommandUtils {
     private static boolean isPullPhrase(String normalized) {
         return normalized.contains("git pull")
                 || normalized.equals("pull")
+                || normalized.equals("пул")
                 || normalized.contains("загрузить изменения")
                 || normalized.contains("загрузи изменения")
                 || normalized.contains("загружай изменения")

@@ -6,6 +6,7 @@ import src.ai.AiGateway;
 import src.ai.PromptBuilder;
 import src.domain.CommandExecutor;
 import src.domain.CommandParser;
+import src.domain.model.GitResult;
 import src.git.GitRepository;
 import src.input.InputSource;
 import src.output.OutputSink;
@@ -204,6 +205,26 @@ final class AssistantLoopTest {
     }
 
     @Test
+    void wakeNameWithFastPullCommandExecutesOriginCurrentBranchWithoutAi() throws Exception {
+        Path remoteDir = repoDir.resolve("origin.git");
+        run(repoDir, "git", "init", "--bare", remoteDir.toString());
+        initRepo();
+        configureGitUser(repoDir);
+        Files.writeString(repoDir.resolve("file.txt"), "content\n");
+        git("add", ".");
+        git("commit", "-m", "initial");
+        git("remote", "add", "origin", remoteDir.toString());
+        git("push", "origin", currentBranch());
+        assertEquals(false, gitResult("rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{u}").success());
+        Harness harness = harness(List.of("матвей загрузить изменения"), List.of());
+
+        harness.run();
+
+        assertEquals(0, harness.ai.prompts.size());
+        assertTrue(harness.output.joined().contains("Загружаю изменения из удалённого репозитория"));
+    }
+
+    @Test
     void aiErrorsAreReportedAndLoopContinues() throws Exception {
         FakeAiGateway ai = new FakeAiGateway(List.of());
         ai.failNext = true;
@@ -252,6 +273,17 @@ final class AssistantLoopTest {
         return run(repoDir, command.toArray(String[]::new));
     }
 
+    private String currentBranch() throws Exception {
+        return git("branch", "--show-current").trim();
+    }
+
+    private GitResult gitResult(String... args) throws Exception {
+        List<String> command = new ArrayList<>();
+        command.add("git");
+        command.addAll(List.of(args));
+        return runWithoutCheck(repoDir, command.toArray(String[]::new));
+    }
+
     private static String run(Path repo, String... command) throws Exception {
         Process process = new ProcessBuilder(command)
                 .directory(repo.toFile())
@@ -263,6 +295,16 @@ final class AssistantLoopTest {
             throw new AssertionError(String.join(" ", command) + " failed: " + output);
         }
         return output;
+    }
+
+    private static GitResult runWithoutCheck(Path repo, String... command) throws Exception {
+        Process process = new ProcessBuilder(command)
+                .directory(repo.toFile())
+                .redirectErrorStream(true)
+                .start();
+        String output = new String(process.getInputStream().readAllBytes(), StandardCharsets.UTF_8);
+        int exitCode = process.waitFor();
+        return new GitResult(exitCode == 0, exitCode, output);
     }
 
     private record Harness(FakeInput input, CapturingOutput output, FakeAiGateway ai, AssistantLoop loop) {

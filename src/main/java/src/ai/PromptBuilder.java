@@ -27,7 +27,7 @@ public final class PromptBuilder {
                 "add_commit" — добавить все изменения и создать коммит, требует parameters.message
                 "branch_create" — создать ветку, требует parameters.name
                 "checkout" — перейти на ветку, требует parameters.name
-                "pull" — загрузить изменения, git pull
+                "pull" — загрузить изменения, git pull origin <текущая-ветка>
                 "push" — отправить изменения, git push
                 "standby" — перейти в режим ожидания до следующего обращения по имени
                 "exit" — полностью завершить программу

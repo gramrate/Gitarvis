@@ -32,7 +32,18 @@ final class AutoCommandUtilsTest {
 
     @Test
     void detectsPullPhrases() {
-        for (String phrase : java.util.List.of("загрузить изменения", "загрузи изменения", "подтяни изменения", "git pull", "pull")) {
+        for (String phrase : java.util.List.of(
+                "загрузить изменения",
+                "загрузи изменения",
+                "загружай изменения",
+                "скачай изменения",
+                "подтяни изменения",
+                "получи изменения",
+                "обнови изменения",
+                "git pull",
+                "pull",
+                "пул"
+        )) {
             Optional<CommandInterpretation> command = AutoCommandUtils.detect(phrase);
 
             assertTrue(command.isPresent(), phrase);
