@@ -32,6 +32,16 @@ public final class AssistantLoop {
     private CommandInterpretation pendingCommand;
     private AssistantState state = AssistantState.WAITING;
 
+    /**
+     *
+     * @param inputSource text
+     * @param outputSink
+     * @param aiGateway
+     * @param promptBuilder
+     * @param commandParser
+     * @param commandExecutor
+     * @param responseFormatter
+     */
     public AssistantLoop(
             InputSource inputSource,
             OutputSink outputSink,
