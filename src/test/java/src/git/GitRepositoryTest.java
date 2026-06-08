@@ -80,6 +80,28 @@ final class GitRepositoryTest {
         assertEquals(false, result.success());
     }
 
+    @Test
+    void pullUsesOriginAndCurrentBranchWithoutTracking() throws Exception {
+        Path remoteDir = repoDir.resolve("origin.git");
+        Path workDir = repoDir.resolve("work");
+        Files.createDirectory(workDir);
+        run(repoDir, "git", "init", "--bare", remoteDir.toString());
+        GitRepository repository = new GitRepository(workDir);
+        assertTrue(repository.init().success());
+        configureGitUser(workDir);
+        Files.writeString(workDir.resolve("file.txt"), "content\n");
+        assertTrue(repository.add(java.util.List.of(".")).success());
+        assertTrue(repository.commit("initial").success());
+        run(workDir, "git", "remote", "add", "origin", remoteDir.toString());
+        run(workDir, "git", "push", "origin", currentBranch(workDir));
+        GitResult upstream = runWithoutCheck(workDir, "git", "rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{u}");
+        assertEquals(false, upstream.success());
+
+        GitResult result = repository.pull();
+
+        assertTrue(result.success(), result.output());
+    }
+
     private static void configureGitUser(Path repo) throws Exception {
         run(repo, "git", "config", "user.email", "test@example.com");
         run(repo, "git", "config", "user.name", "Test User");
@@ -100,5 +122,15 @@ final class GitRepositoryTest {
             throw new AssertionError(String.join(" ", command) + " failed: " + output);
         }
         return output;
+    }
+
+    private static GitResult runWithoutCheck(Path repo, String... command) throws Exception {
+        Process process = new ProcessBuilder(command)
+                .directory(repo.toFile())
+                .redirectErrorStream(true)
+                .start();
+        String output = new String(process.getInputStream().readAllBytes(), java.nio.charset.StandardCharsets.UTF_8);
+        int exitCode = process.waitFor();
+        return new GitResult(exitCode == 0, exitCode, output);
     }
 }

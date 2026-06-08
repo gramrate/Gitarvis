@@ -61,7 +61,7 @@ public final class GitRepository {
     }
 
     public GitResult push() throws IOException, InterruptedException {
-        GitResult branchResult = git("branch", "--show-current");
+        GitResult branchResult = currentBranch();
         if (!branchResult.success() || branchResult.output().isBlank()) {
             return new GitResult(false, branchResult.exitCode(), "Не могу определить текущую ветку\n" + branchResult.output());
         }
@@ -70,7 +70,12 @@ public final class GitRepository {
     }
 
     public GitResult pull() throws IOException, InterruptedException {
-        return git("pull");
+        GitResult branchResult = currentBranch();
+        if (!branchResult.success() || branchResult.output().isBlank()) {
+            return new GitResult(false, branchResult.exitCode(), "Не могу определить текущую ветку\n" + branchResult.output());
+        }
+        String currentBranch = branchResult.output().trim();
+        return git("pull", "origin", currentBranch);
     }
 
     public GitResult branch() throws IOException, InterruptedException {
@@ -83,6 +88,10 @@ public final class GitRepository {
 
     public GitResult checkout(String branch) throws IOException, InterruptedException {
         return git("checkout", branch);
+    }
+
+    private GitResult currentBranch() throws IOException, InterruptedException {
+        return git("branch", "--show-current");
     }
 
     private GitResult git(String... args) throws IOException, InterruptedException {
